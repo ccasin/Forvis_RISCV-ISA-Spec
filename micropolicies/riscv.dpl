@@ -1,0 +1,712 @@
+/*
+ * Copyright © 2017-2018 The Charles Stark Draper Laboratory, Inc. and/or Dover Microsystems, Inc.
+ * All rights reserved. 
+ *
+ * Use and disclosure subject to the following license. 
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+module riscv:
+
+policy:
+        // a policy that allows anything and contributes no results
+    allPass = branchGrp(code == _, env == _, op1 == _, op2 == _ -> env = env )
+            ^ jumpRegGrp(code == _, env == _, target == _ -> env = env , return = {})
+            ^ jumpGrp(code == _, env == _ -> return = {})
+            ^ loadUpperGrp(code == _, env == _ -> env = env, dest = {})
+            ^ immArithGrp(code == _, env == _, op1 == _ -> env = env, res = {})
+            ^ arithGrp(code == _, env == _, op1 == _, op2 == _ -> env = env, res = {})
+            ^ loadGrp(code == _, env == _, addr == _, mem == _ -> env = env, res = {})
+            ^ storeGrp(code == _, env == _, addr == _, val == _, mem == _ -> env = env, mem = {})
+            ^ mulDivRemGrp(code == _, env == _, op1 == _, op2 == _ -> env = env, res = {})
+            ^ csrGrp(code == _, env == _, op1 == _, csr == _ -> env = env, csr = {}, res = {})
+            ^ csriGrp(code == _, env == _, csr == _ -> env = env, csr = {}, res = {})
+            ^ privGrp(code == _, env == _ -> env = env)
+//            ^ systemGrp(code == _, env == _ -> env = env)
+
+    notMemPass = branchGrp(code == _, env == _, op1 == _, op2 == _ -> env = env )
+            ^ jumpRegGrp(code == _, env == _, target == _ -> env = env , return = {})
+            ^ jumpGrp(code == _, env == _ -> return = {})
+            ^ loadUpperGrp(code == _, env == _ -> env = env, dest = {})
+            ^ immArithGrp(code == _, env == _, op1 == _ -> env = env, res = {})
+            ^ arithGrp(code == _, env == _, op1 == _, op2 == _ -> env = env, res = {})
+            ^ mulDivRemGrp(code == _, env == _, op1 == _, op2 == _ -> env = env, res = {})
+            ^ csrGrp(code == _, env == _, op1 == _, csr == _ -> env = env, csr = {}, res = {})
+            ^ csriGrp(code == _, env == _, csr == _ -> env = env, csr = {}, res = {})
+            ^ privGrp(code == _, env == _ -> env = env)
+//            ^ systemGrp(code == _, env == _ -> env = env)
+
+group:
+    grp branchGrp(RS1:op1, RS2:op2 -> )
+        beq
+        bne
+        blt
+        bge
+        bltu
+        bgeu
+    grp retGrp(RS1:target -> )
+        jalr    x0, *
+    grp jumpRegGrp(RS1:target -> RD:return)
+        jalr
+    grp jumpGrp( -> RD:return)
+        jal
+    grp callGrp( -> RD:return)
+        jal
+        jalr
+
+    grp controlFlowGrp( -> )
+        beq
+        bne
+        blt
+        bge
+        bltu
+        bgeu
+        jal
+        jalr
+
+    grp pcGrp(-> RD:dest)
+        auipc
+
+    grp addiGrp( -> RD:dest)
+        addi
+
+    grp loadUpperGrp(-> RD:dest)
+        lui
+        auipc
+/*
+    moveGrp(RS1:src -> RD:dest)
+        addi    *, *, 0x0
+*/
+    grp moveGrp(RS1:src -> RD:dest)
+        fmv.w.x
+        fmv.d.x
+        fmv.q.x    
+        fmv.x.w
+        fmv.x.d
+        fmv.x.q
+
+    grp xoriGrp(RS1:op1 -> RD:res)
+        xori
+
+    grp andiGrp(RS1:op1 -> RD:res)
+        andi
+        
+    grp immArithGrp(RS1:op1 -> RD:res)
+        addi
+        slli
+        slti
+        sltiu
+        xori
+        srli
+        srai
+        ori
+        andi
+        addiw
+        slliw
+        srliw
+        sraiw
+
+    grp xorGrp(RS1:op1, RS2:op2 -> RD:res)
+        xor
+
+    grp arithGrp(RS1:op1, RS2:op2 -> RD:res)
+        add
+        sub
+        sll
+        slt
+        sltu
+        xor
+        srl
+        sra
+        or 
+        and
+        addw
+        subw
+        sllw
+        srlw
+        sraw
+        fadd.d
+        fsub.d
+        fadd.s
+        fsub.s
+        fadd.q
+        fsub.q
+        amoadd.w
+        amoxor.w
+        amoor.w
+        amoand.w
+
+
+    grp loadGrp(RS1:addr, MEM:mem -> RD:res)
+        lb
+        lh
+        lw
+        ld
+        lbu
+        lhu
+        lwu
+        flw
+        fld
+        flq
+        lr.w
+        
+    grp storeGrp(RS1:addr, RS2:val, MEM:mem -> MEM:mem)
+        sb
+        sh
+        sw
+        sd
+        fsw
+        fsd
+        fsq
+        sc.w
+
+/*        
+    stackMoveGrp(RS2:src -> MEM:res)
+        sw
+        lw
+ */
+    grp mulDivRemGrp(RS1:op1, RS2:op2 -> RD:res)
+        mul
+        mulh
+        mulhsu
+        mulhu
+        div
+        divu
+        rem
+        remu
+        fmul.s
+        fdiv.s
+        fmul.d
+        fdiv.d
+        fmul.q
+        fdiv.q
+
+    grp csrGrp(RS1:op1, CSR:csr -> CSR:csr, RD:res)
+        csrrw
+        csrrs
+        csrrc
+        
+    grp csriGrp(CSR:csr -> CSR:csr, RD:res)
+        csrrwi
+        csrrsi
+        csrrci
+
+    grp mretGrp ( -> )
+        mret
+
+    grp privGrp( -> )
+        ecall
+        ebreak
+        uret
+        sret
+        mret
+        sfence.vma
+        wfi
+
+    grp systemGrp( -> )
+        fence
+        fence.i
+
+
+    grp floatGrp( -> )
+        flw
+        fld
+        flq
+        fsw
+        fsd
+        fsq
+        fmadd.s
+        fmsub.s
+        fnmsub.s
+        fnmadd.s
+        fmadd.d
+        fmsub.d
+        fnmsub.d
+        fnmadd.d
+        fmadd.q
+        fmsub.q
+        fnmsub.q
+        fnmadd.q
+        fadd.s
+        fsub.s
+        fmul.s
+        fdiv.s
+        fadd.d
+        fsub.d
+        fmul.d
+        fdiv.d
+        fadd.q
+        fsub.q
+        fmul.q
+        fdiv.q
+        fsgnj.s
+        fsgnjn.s
+        fsgnjx.s
+        fmin.s
+        fmax.s
+        fsgnj.d
+        fsgnjn.d
+        fsgnjx.d
+        fmin.d
+        fmax.d
+        fsgnj.q
+        fsgnjn.q
+        fsgnjx.q
+        fmin.q
+        fmax.q
+        fle.s
+        flt.s
+        feq.s
+        fle.d
+        flt.d
+        feq.d
+        fle.q
+        flt.q
+        feq.q
+        fsqrt.s
+        fcvt.s.d
+        fcvt.d.s
+        fsqrt.d
+        fcvt.s.q
+        fcvt.q.s
+        fcvt.d.q
+        fcvt.q.d
+        fsqrt.q
+        fcvt.w.s
+        fcvt.wu.s
+        fcvt.l.s
+        fcvt.lu.s
+        fcvt.w.d
+        fcvt.wu.d
+        fcvt.l.d
+        fcvt.lu.d
+        fcvt.w.q
+        fcvt.wu.q
+        fcvt.l.q
+        fcvt.lu.q
+        fcvt.s.w
+        fcvt.s.wu
+        fcvt.s.l
+        fcvt.s.lu
+        fcvt.d.w
+        fcvt.d.wu
+        fcvt.d.l
+        fcvt.d.lu
+        fcvt.q.w
+        fcvt.q.wu
+        fcvt.q.l
+        fcvt.q.lu
+        fmv.x.w
+        fclass.s
+        fmv.x.d
+        fclass.d
+        fmv.x.q
+        fclass.q
+        fmv.w.x
+        fmv.d.x
+        fmv.q.x    
+
+    grp atomicGrp( -> ) 
+        lr.w
+        sc.w
+        amoadd.w
+        amoxor.w
+        amoor.w
+        amoand.w
+        amomin.w
+        amomax.w
+        amominu.w
+        amomaxu.w
+        amoswap.w
+
+    grp allGrp( -> )
+    // branchGrp(RS1:op1, RS2:op2 -> )
+        beq
+        bne
+        blt
+        bge
+        bltu
+        bgeu
+    // jumpGrp(RS1:target -> RD:return)
+        jalr
+        jal
+    // loadUpperGrp(-> RD:dest)
+        lui
+        auipc
+    // immArithGrp(RS1:op1 -> RD:res)
+        addi
+        slli
+        slti
+        sltiu
+        xori
+        srli
+        srai
+        ori
+        andi
+        addiw
+        slliw
+        srliw
+        sraiw
+    // arithGrp(RS1:op1, RS2:op2 -> RD:res)
+        add
+        sub
+        sll
+        slt
+        sltu
+        xor
+        srl
+        sra
+        or 
+        and
+        addw
+        subw
+        sllw
+        srlw
+        sraw
+    // loadGrp(RS1:addr, MEM:mem -> RD:res)
+        lb
+        lh
+        lw
+        ld
+        lbu
+        lhu
+        lwu
+    // storeGrp(RS1:addr, RS2:val, MEM:mem -> MEM:mem)
+        sb
+        sh
+        sw
+        sd
+    // stackMoveGrp(RS2:src -> MEM:res)
+        sw
+        lw
+    // mulDivRemGrp(RS1:op1, RS2:op2 -> RD:res)
+        mul
+        mulh
+        mulhsu
+        mulhu
+        div
+        divu
+        rem
+        remu
+
+    // csrGrp(RS1:op1, CSR:csr -> CSR:csr, RD:res)
+        csrrw
+        csrrs
+        csrrc
+    // csriGrp(IMM:op1, CSR:csr -> CSR:csr, RD:res)
+        csrrwi
+        csrrsi
+        csrrci
+    // privGrp(op1, op2, res)
+        ecall
+        ebreak
+        uret
+        sret
+        mret
+        sfence.vma
+        wfi
+    // systemGrp()
+        fence
+        fence.i
+    // floatGrp( -> )
+        flw
+        fld
+        flq
+        fsw
+        fsd
+        fsq
+        fmadd.s
+        fmsub.s
+        fnmsub.s
+        fnmadd.s
+        fmadd.d
+        fmsub.d
+        fnmsub.d
+        fnmadd.d
+        fmadd.q
+        fmsub.q
+        fnmsub.q
+        fnmadd.q
+        fadd.s
+        fsub.s
+        fmul.s
+        fdiv.s
+        fadd.d
+        fsub.d
+        fmul.d
+        fdiv.d
+        fadd.q
+        fsub.q
+        fmul.q
+        fdiv.q
+        fsgnj.s
+        fsgnjn.s
+        fsgnjx.s
+        fmin.s
+        fmax.s
+        fsgnj.d
+        fsgnjn.d
+        fsgnjx.d
+        fmin.d
+        fmax.d
+        fsgnj.q
+        fsgnjn.q
+        fsgnjx.q
+        fmin.q
+        fmax.q
+        fle.s
+        flt.s
+        feq.s
+        fle.d
+        flt.d
+        feq.d
+        fle.q
+        flt.q
+        feq.q
+        fsqrt.s
+        fcvt.s.d
+        fcvt.d.s
+        fsqrt.d
+        fcvt.s.q
+        fcvt.q.s
+        fcvt.d.q
+        fcvt.q.d
+        fsqrt.q
+        fcvt.w.s
+        fcvt.wu.s
+        fcvt.l.s
+        fcvt.lu.s
+        fcvt.w.d
+        fcvt.wu.d
+        fcvt.l.d
+        fcvt.lu.d
+        fcvt.w.q
+        fcvt.wu.q
+        fcvt.l.q
+        fcvt.lu.q
+        fcvt.s.w
+        fcvt.s.wu
+        fcvt.s.l
+        fcvt.s.lu
+        fcvt.d.w
+        fcvt.d.wu
+        fcvt.d.l
+        fcvt.d.lu
+        fcvt.q.w
+        fcvt.q.wu
+        fcvt.q.l
+        fcvt.q.lu
+        fmv.x.w
+        fclass.s
+        fmv.x.d
+        fclass.d
+        fmv.x.q
+        fclass.q
+        fmv.w.x
+        fmv.d.x
+        fmv.q.x
+
+
+    grp notMemGrp( -> )
+    // branchGrp(RS1:op1, RS2:op2 -> )
+        beq
+        bne
+        blt
+        bge
+        bltu
+        bgeu
+    // jumpGrp(RS1:target -> RD:return)
+        jalr
+        jal
+    // loadUpperGrp(-> RD:dest)
+        lui
+        auipc
+    // immArithGrp(RS1:op1 -> RD:res)
+        addi
+        slli
+        slti
+        sltiu
+        xori
+        srli
+        srai
+        ori
+        andi
+        addiw
+        slliw
+        srliw
+        sraiw
+    // arithGrp(RS1:op1, RS2:op2 -> RD:res)
+        add
+        sub
+        sll
+        slt
+        sltu
+        xor
+        srl
+        sra
+        or 
+        and
+        addw
+        subw
+        sllw
+        srlw
+        sraw
+    // stackMoveGrp(RS2:src -> MEM:res)
+        sw
+        lw
+    // mulDivRemGrp(RS1:op1, RS2:op2 -> RD:res)
+        mul
+        mulh
+        mulhsu
+        mulhu
+        div
+        divu
+        rem
+        remu
+
+    // csrGrp(RS1:op1, CSR:csr -> CSR:csr, RD:res)
+        csrrw
+        csrrs
+        csrrc
+    // csriGrp(IMM:op1, CSR:csr -> CSR:csr, RD:res)
+        csrrwi
+        csrrsi
+        csrrci
+    // privGrp(op1, op2, res)
+        ecall
+        ebreak
+        uret
+        sret
+        mret
+        sfence.vma
+        wfi
+    // systemGrp()
+        fence
+        fence.i
+//floatGrp( -> )
+        flw
+        fld
+        flq
+        fsw
+        fsd
+        fsq
+        fmadd.s
+        fmsub.s
+        fnmsub.s
+        fnmadd.s
+        fmadd.d
+        fmsub.d
+        fnmsub.d
+        fnmadd.d
+        fmadd.q
+        fmsub.q
+        fnmsub.q
+        fnmadd.q
+        fadd.s
+        fsub.s
+        fmul.s
+        fdiv.s
+        fadd.d
+        fsub.d
+        fmul.d
+        fdiv.d
+        fadd.q
+        fsub.q
+        fmul.q
+        fdiv.q
+        fsgnj.s
+        fsgnjn.s
+        fsgnjx.s
+        fmin.s
+        fmax.s
+        fsgnj.d
+        fsgnjn.d
+        fsgnjx.d
+        fmin.d
+        fmax.d
+        fsgnj.q
+        fsgnjn.q
+        fsgnjx.q
+        fmin.q
+        fmax.q
+        fle.s
+        flt.s
+        feq.s
+        fle.d
+        flt.d
+        feq.d
+        fle.q
+        flt.q
+        feq.q
+        fsqrt.s
+        fcvt.s.d
+        fcvt.d.s
+        fsqrt.d
+        fcvt.s.q
+        fcvt.q.s
+        fcvt.d.q
+        fcvt.q.d
+        fsqrt.q
+        fcvt.w.s
+        fcvt.wu.s
+        fcvt.l.s
+        fcvt.lu.s
+        fcvt.w.d
+        fcvt.wu.d
+        fcvt.l.d
+        fcvt.lu.d
+        fcvt.w.q
+        fcvt.wu.q
+        fcvt.l.q
+        fcvt.lu.q
+        fcvt.s.w
+        fcvt.s.wu
+        fcvt.s.l
+        fcvt.s.lu
+        fcvt.d.w
+        fcvt.d.wu
+        fcvt.d.l
+        fcvt.d.lu
+        fcvt.q.w
+        fcvt.q.wu
+        fcvt.q.l
+        fcvt.q.lu
+        fmv.x.w
+        fclass.s
+        fmv.x.d
+        fclass.d
+        fmv.x.q
+        fclass.q
+        fmv.w.x
+        fmv.d.x
+        fmv.q.x    
+//atomicGrp( -> ) 
+        lr.w
+        sc.w
+        amoadd.w
+        amoxor.w
+        amoor.w
+        amoand.w
+        amomin.w
+        amomax.w
+        amominu.w
+        amomaxu.w
+        amoswap.w

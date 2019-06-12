@@ -13,29 +13,31 @@ import Run_Program_PIPE
 import Generator (genASTFile,genSymbolsFile)
 
 import Test.QuickCheck
+import qualified Text.PrettyPrint as P
 
-import qualified TestHeapSafety
+import qualified TestUserType
 import Printing
+import Debug.Trace
 
 import Control.Monad
 
 -- Null "show" functions, for things that we don't want QuickCheck trying to print
 instance Show Machine_State where
   show _ = ""
-instance Show MStatePair where
+instance Show MState where
   show _ = ""
 
-pol = "heap"
+pol = "userType"
 
 load_policy :: IO PolicyPlus
 load_policy = do
   case pol of
-    "heap" -> TestHeapSafety.load_policy 
+    "userType" -> TestUserType.load_policy
     otherwise -> error $ "unknown policy '" ++ pol ++ "'"
 
 main_trace = do
   pplus <- load_policy
-  (M (ms1,ps1) (ms2,ps2)) <- head <$> sample' (genMStatePair pplus pplus)
+  (M (ms1,ps1)) <- head <$> sample' (genMState pplus pplus)
   let (res, tr) = run_loop pplus 10 ps1 ms1
       (ps', ms') : _ = tr
   putStrLn ""
@@ -46,8 +48,7 @@ main_trace = do
 --  print_coupled pplus ms' ps'
 --  putStrLn "_______________________________________________________________________"
 --  putStrLn "Trace:"
-  let finalTrace = {- map flipboth $ -} reverse $ zip tr tr
-  uncurry (printTrace pplus) (unzip finalTrace)
+  printTrace pplus tr
 --  printTrace pplus (reverse tr)
   putStrLn (show res)
 
@@ -55,10 +56,14 @@ main_trace = do
 main_test = do
   pplus <- load_policy
   quickCheckWith stdArgs{maxSuccess=1000}
-    $ forAllShrink (genMStatePair pplus pplus)
-           (\mp -> (shrinkMStatePair pplus) pplus mp 
-                   ++ concatMap (shrinkMStatePair pplus pplus) (shrinkMStatePair pplus pplus mp))
-    $ \m -> prop pplus pplus m
+
+--    $ forAllShrink (genMState pplus pplus)
+--           (\m -> (shrinkMState pplus) pplus m)
+--           (\m -> prop pplus pplus m)
+
+--    Simple version
+    $ forAll (genMState pplus pplus) $ \m -> prop pplus pplus m
+    
 
 main = main_test
 

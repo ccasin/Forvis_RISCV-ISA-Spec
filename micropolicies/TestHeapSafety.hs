@@ -211,7 +211,7 @@ genInstr pplus ms ps =
                   -- (Old comment? "Need to figure out what to do with Malloc")
                   alloc <- frequency [(2, pure $ emptyInstTag pplus),
                                       (3, pure $ allocInstTag pplus)]
-                  return (ADDI rd rs imm, alloc))
+                    return (ADDI rd rs imm, alloc))
             , (onNonEmpty dataRegs 3,
                do -- LOAD
                   (rs,content,min_imm,max_imm,tag) <- elements dataRegs

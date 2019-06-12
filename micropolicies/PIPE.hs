@@ -19,7 +19,9 @@ module PIPE(PIPE_Policy,  -- TODO: Maybe this is not needed?
             mkMemT, mem_readT, mem_writeT,
             PIPE_State(..),
             init_pipe_state,
-            MStatePair(..),
+            MemUse(..),
+            find_maddr,
+            MState(..),
             PIPE_Result(..),
             exec_pipe) where
 
@@ -72,22 +74,19 @@ data PolicyPlus =
     -- The policy itself
     policy :: PIPE_Policy
     -- Features for generation
-  , genMStatePair :: PolicyPlus -> Gen MStatePair
-  , initGPR :: TagSet 
+  , genMState :: PolicyPlus -> Gen MState
+  , initGPR :: TagSet
   , initMem :: TagSet 
   , initPC :: TagSet 
-  , initNextColor :: Color
   , emptyInstTag :: TagSet
       -- (The next three are arguably policy-local things and should be removed from here)
   , dataMemLow :: Integer
   , dataMemHigh :: Integer
   , instrLow :: Integer
   -- Features for shrinking
-  , shrinkMStatePair :: PolicyPlus -> MStatePair -> [MStatePair]
-  -- Features for printing
-  , compareMachines :: PolicyPlus -> MStatePair -> Doc  -- needs a better name!
+  , shrinkMState :: PolicyPlus -> MState -> [MState]
   -- Features for testing
-  , prop :: PolicyPlus -> MStatePair -> Property
+  , prop :: PolicyPlus -> MState -> Property
   }
 
 type P a = Reader PolicyPlus a
@@ -215,7 +214,7 @@ init_pipe_state pplus = PIPE_State {
   p_pc = initPC pplus,
   p_gprs = mkGPR_FileT (initGPR pplus),
   p_mem = mkMemT [],
-  p_next = initNextColor pplus
+  p_next = 0
   }
 
 {- These operators are private (for no very strong reason). -}
@@ -232,13 +231,25 @@ set_mtag p a t = p {p_mem = mem_writeT (p_mem p) a t}
 get_mtag :: PolicyPlus -> PIPE_State -> Integer -> TagSet
 get_mtag pplus p = mem_readT pplus (p_mem p) 
 
-data MStatePair =
-  M (Machine_State, PIPE_State) (Machine_State, PIPE_State)
+data MState = M (Machine_State, PIPE_State)
 
 ---------------------------------
 
 data PIPE_Result = PIPE_Trap String
                  | PIPE_Success
+
+data MemUse = MUStore Integer | MULoad Integer | MUNone
+
+find_maddr :: Instr_I -> Machine_State -> MemUse
+find_maddr (LB _ rs1 imm) m = MULoad $ mstate_gpr_read rs1 m + imm
+find_maddr (LH _ rs1 imm) m = MULoad $ mstate_gpr_read rs1 m + imm
+find_maddr (LW _ rs1 imm) m = MULoad $ mstate_gpr_read rs1 m + imm
+find_maddr (LBU _ rs1 imm) m = MULoad $ mstate_gpr_read rs1 m + imm
+find_maddr (LHU _ rs1 imm) m = MULoad $ mstate_gpr_read rs1 m + imm
+find_maddr (SB rs1 _ imm) m = MUStore $ mstate_gpr_read rs1 m + imm
+find_maddr (SH rs1 _ imm) m = MUStore $ mstate_gpr_read rs1 m + imm
+find_maddr (SW rs1 _ imm) m = MUStore $ mstate_gpr_read rs1 m + imm
+find_maddr _ _ = MUNone
 
 exec_pipe :: PolicyPlus -> Machine_State -> PIPE_State -> Integer -> (PIPE_State, PIPE_Result)
 exec_pipe pplus m p u32 =
@@ -249,16 +260,10 @@ exec_pipe pplus m p u32 =
       (p, PIPE_Success)
       -- error $ "exec_pipe cannot decode instruction 0x" ++ (showHex u32 "") ++ " at pc: " ++ (show $ mstate_pc_read m)
     Just inst ->
-      let maddr = case inst of 
-                    LB _ rs1 imm -> mstate_gpr_read rs1 m + imm
-                    LH _ rs1 imm -> mstate_gpr_read rs1 m + imm
-                    LW _ rs1 imm -> mstate_gpr_read rs1 m + imm
-                    LBU _ rs1 imm -> mstate_gpr_read rs1 m + imm
-                    LHU _ rs1 imm -> mstate_gpr_read rs1 m + imm
-                    SB rs1 _ imm -> mstate_gpr_read rs1 m + imm
-                    SH rs1 _ imm -> mstate_gpr_read rs1 m + imm
-                    SW rs1 _ imm -> mstate_gpr_read rs1 m + imm
-                    _ -> error $ "maddr undefined for " ++ (show inst)
+      let maddr = case find_maddr inst m of
+            MUStore i -> i
+            MULoad i -> i
+            MUNone -> error $ "maddr undefined for " ++ (show inst)
       in exec_pipe' pplus p (f_pc m) inst maddr
 
 {- Proceed with only PIPE_State -}
